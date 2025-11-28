@@ -115,6 +115,8 @@
         let exploding = false;
         let explosionParticles = [];
         let explosionTimer = 0;
+        let pineapplesEaten = 0;
+        let hasShield = false;
 
         // Shark object
         const shark = {
@@ -213,6 +215,29 @@
             }
 
             ctx.restore();
+        }
+
+        // Draw shield around shark
+        function drawShield() {
+            if (hasShield) {
+                const time = Date.now() / 200; // For animation
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 3;
+                ctx.globalAlpha = 0.6 + Math.sin(time) * 0.2; // Pulsing effect
+                ctx.beginPath();
+                ctx.arc(shark.x + 40, shark.y + 25, 50, 0, Math.PI * 2);
+                ctx.stroke();
+
+                // Inner glow
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.3 + Math.sin(time) * 0.15;
+                ctx.beginPath();
+                ctx.arc(shark.x + 40, shark.y + 25, 48, 0, Math.PI * 2);
+                ctx.stroke();
+
+                ctx.globalAlpha = 1.0;
+            }
         }
 
         // Draw pineapple
@@ -482,6 +507,7 @@
                 updateShark();
             }
             drawShark();
+            drawShield();
 
             // Update and draw pineapples (only if not exploding)
             if (!exploding) {
@@ -493,8 +519,14 @@
                 // Check collision
                 if (checkCollision(pineapple)) {
                     score += 10;
+                    pineapplesEaten++;
                     scoreDisplay.textContent = `Score: ${score}`;
                     pineapples.splice(pineapples.indexOf(pineapple), 1);
+
+                    // Award shield every 10 pineapples
+                    if (pineapplesEaten % 10 === 0) {
+                        hasShield = true;
+                    }
                 }
             });
 
@@ -504,10 +536,17 @@
                 bombs.forEach(bomb => {
                     drawBomb(bomb);
 
-                    // Check collision with bomb - trigger explosion!
+                    // Check collision with bomb
                     if (checkCollision(bomb)) {
-                        createExplosion(bomb.x, bomb.y);
-                        bombs.splice(bombs.indexOf(bomb), 1);
+                        if (hasShield) {
+                            // Shield blocks the bomb
+                            hasShield = false;
+                            bombs.splice(bombs.indexOf(bomb), 1);
+                        } else {
+                            // No shield - trigger explosion!
+                            createExplosion(bomb.x, bomb.y);
+                            bombs.splice(bombs.indexOf(bomb), 1);
+                        }
                     }
                 });
             }
@@ -538,6 +577,8 @@
             exploding = false;
             explosionParticles = [];
             explosionTimer = 0;
+            pineapplesEaten = 0;
+            hasShield = false;
             shark.x = 100;
             shark.y = canvas.height - 100;
             shark.direction = 1;
