@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Shark Eating Pineapples</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(to bottom, #4facfe 0%, #00f2fe 100%);
+            font-family: Arial, sans-serif;
+        }
+
+        #gameContainer {
+            text-align: center;
+        }
+
+        canvas {
+            border: 4px solid #fff;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            background: linear-gradient(to bottom, #87CEEB 0%, #4682B4 100%);
+        }
+
+        #score {
+            font-size: 28px;
+            color: white;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
+
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: none;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 15px;
+            text-align: center;
+            z-index: 10;
+        }
+
+        #gameOver h2 {
+            margin-bottom: 10px;
+            font-size: 36px;
+        }
+
+        #gameOver p {
+            margin-bottom: 20px;
+            font-size: 20px;
+        }
+
+        #restartBtn {
+            padding: 12px 30px;
+            font-size: 18px;
+            background: #ff6b6b;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        #restartBtn:hover {
+            background: #ff5252;
+        }
+
+        #instructions {
+            color: white;
+            margin-top: 15px;
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="score">Score: 0</div>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="instructions">Use ← → arrow keys to move the shark!</div>
+
+        <div id="gameOver">
+            <h2>Game Over!</h2>
+            <p id="finalScore">Final Score: 0</p>
+            <button id="restartBtn">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreDisplay = document.getElementById('score');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreDisplay = document.getElementById('finalScore');
+        const restartBtn = document.getElementById('restartBtn');
+
+        // Game state
+        let score = 0;
+        let gameRunning = true;
+        let keys = {};
+
+        // Shark object
+        const shark = {
+            x: 100,
+            y: canvas.height - 100,
+            width: 80,
+            height: 50,
+            speed: 5,
+            color: '#4682B4',
+            direction: 1 // 1 = right, -1 = left
+        };
+
+        // Pineapples array
+        let pineapples = [];
+        let pineappleSpawnTimer = 0;
+        const pineappleSpawnRate = 80; // Lower = more frequent
+
+        // Draw shark
+        function drawShark() {
+            ctx.save();
+
+            // Flip horizontally if facing left
+            if (shark.direction === -1) {
+                ctx.translate(shark.x + shark.width, 0);
+                ctx.scale(-1, 1);
+                ctx.translate(-shark.x, 0);
+            }
+
+            // Shark body
+            ctx.fillStyle = '#708090';
+            ctx.beginPath();
+            ctx.ellipse(shark.x + 40, shark.y + 25, 40, 25, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Shark fin
+            ctx.fillStyle = '#556B7D';
+            ctx.beginPath();
+            ctx.moveTo(shark.x + 40, shark.y);
+            ctx.lineTo(shark.x + 50, shark.y - 15);
+            ctx.lineTo(shark.x + 60, shark.y + 10);
+            ctx.fill();
+
+            // Shark tail
+            ctx.beginPath();
+            ctx.moveTo(shark.x, shark.y + 25);
+            ctx.lineTo(shark.x - 20, shark.y + 10);
+            ctx.lineTo(shark.x - 20, shark.y + 40);
+            ctx.fill();
+
+            // Shark eye
+            ctx.fillStyle = 'white';
+            ctx.beginPath();
+            ctx.arc(shark.x + 60, shark.y + 20, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            ctx.arc(shark.x + 62, shark.y + 20, 2, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Shark mouth
+            ctx.strokeStyle = '#2F4F4F';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(shark.x + 70, shark.y + 30, 8, 0, Math.PI);
+            ctx.stroke();
+
+            // Teeth
+            ctx.fillStyle = 'white';
+            for (let i = 0; i < 5; i++) {
+                ctx.beginPath();
+                ctx.moveTo(shark.x + 65 + i * 3, shark.y + 30);
+                ctx.lineTo(shark.x + 66 + i * 3, shark.y + 34);
+                ctx.lineTo(shark.x + 67 + i * 3, shark.y + 30);
+                ctx.fill();
+            }
+
+            ctx.restore();
+        }
+
+        // Draw pineapple
+        function drawPineapple(pineapple) {
+            // Pineapple body
+            ctx.fillStyle = '#FFD700';
+            ctx.beginPath();
+            ctx.ellipse(pineapple.x, pineapple.y, 15, 20, 0, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Pineapple pattern
+            ctx.strokeStyle = '#FFA500';
+            ctx.lineWidth = 1;
+            for (let i = -15; i < 15; i += 5) {
+                ctx.beginPath();
+                ctx.moveTo(pineapple.x - 12, pineapple.y + i);
+                ctx.lineTo(pineapple.x + 12, pineapple.y + i);
+                ctx.stroke();
+            }
+            for (let i = -10; i < 10; i += 5) {
+                ctx.beginPath();
+                ctx.moveTo(pineapple.x + i, pineapple.y - 18);
+                ctx.lineTo(pineapple.x + i, pineapple.y + 18);
+                ctx.stroke();
+            }
+
+            // Pineapple leaves
+            ctx.fillStyle = '#228B22';
+            ctx.beginPath();
+            ctx.moveTo(pineapple.x - 5, pineapple.y - 20);
+            ctx.lineTo(pineapple.x - 3, pineapple.y - 35);
+            ctx.lineTo(pineapple.x, pineapple.y - 20);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(pineapple.x, pineapple.y - 20);
+            ctx.lineTo(pineapple.x + 2, pineapple.y - 38);
+            ctx.lineTo(pineapple.x + 5, pineapple.y - 20);
+            ctx.fill();
+
+            ctx.beginPath();
+            ctx.moveTo(pineapple.x + 5, pineapple.y - 20);
+            ctx.lineTo(pineapple.x + 7, pineapple.y - 33);
+            ctx.lineTo(pineapple.x + 10, pineapple.y - 20);
+            ctx.fill();
+        }
+
+        // Spawn pineapple
+        function spawnPineapple() {
+            const pineapple = {
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: -40,
+                width: 30,
+                height: 55,
+                speed: 2 + Math.random() * 2
+            };
+            pineapples.push(pineapple);
+        }
+
+        // Update pineapples
+        function updatePineapples() {
+            pineappleSpawnTimer++;
+            if (pineappleSpawnTimer > pineappleSpawnRate) {
+                spawnPineapple();
+                pineappleSpawnTimer = 0;
+            }
+
+            for (let i = pineapples.length - 1; i >= 0; i--) {
+                pineapples[i].y += pineapples[i].speed;
+
+                // Remove pineapples that fall off screen
+                if (pineapples[i].y > canvas.height + 50) {
+                    pineapples.splice(i, 1);
+                }
+            }
+        }
+
+        // Check collision
+        function checkCollision(pineapple) {
+            return shark.x < pineapple.x + pineapple.width &&
+                   shark.x + shark.width > pineapple.x &&
+                   shark.y < pineapple.y + pineapple.height &&
+                   shark.y + shark.height > pineapple.y;
+        }
+
+        // Update shark position
+        function updateShark() {
+            if (keys['ArrowLeft'] && shark.x > 0) {
+                shark.x -= shark.speed;
+                shark.direction = -1; // Face left
+            }
+            if (keys['ArrowRight'] && shark.x < canvas.width - shark.width) {
+                shark.x += shark.speed;
+                shark.direction = 1; // Face right
+            }
+        }
+
+        // Draw bubbles for effect
+        let bubbles = [];
+        function createBubbles() {
+            if (Math.random() < 0.1) {
+                bubbles.push({
+                    x: Math.random() * canvas.width,
+                    y: canvas.height,
+                    radius: Math.random() * 5 + 2,
+                    speed: Math.random() * 2 + 1
+                });
+            }
+        }
+
+        function drawBubbles() {
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            for (let i = bubbles.length - 1; i >= 0; i--) {
+                ctx.beginPath();
+                ctx.arc(bubbles[i].x, bubbles[i].y, bubbles[i].radius, 0, Math.PI * 2);
+                ctx.fill();
+
+                bubbles[i].y -= bubbles[i].speed;
+
+                if (bubbles[i].y < -10) {
+                    bubbles.splice(i, 1);
+                }
+            }
+        }
+
+        // Game loop
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw background gradient
+            const gradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            gradient.addColorStop(0, '#87CEEB');
+            gradient.addColorStop(1, '#4682B4');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw bubbles
+            createBubbles();
+            drawBubbles();
+
+            // Update and draw shark
+            updateShark();
+            drawShark();
+
+            // Update and draw pineapples
+            updatePineapples();
+            pineapples.forEach(pineapple => {
+                drawPineapple(pineapple);
+
+                // Check collision
+                if (checkCollision(pineapple)) {
+                    score += 10;
+                    scoreDisplay.textContent = `Score: ${score}`;
+                    pineapples.splice(pineapples.indexOf(pineapple), 1);
+                }
+            });
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            keys[e.key] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key] = false;
+        });
+
+        // Restart game
+        restartBtn.addEventListener('click', () => {
+            score = 0;
+            pineapples = [];
+            bubbles = [];
+            shark.x = 100;
+            shark.y = canvas.height - 100;
+            shark.direction = 1;
+            scoreDisplay.textContent = 'Score: 0';
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            gameLoop();
+        });
+
+        // Start game
+        gameLoop();
+    </script>
+</body>
+</html>
