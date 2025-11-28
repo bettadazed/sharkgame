@@ -112,6 +112,9 @@
         let score = 0;
         let gameRunning = true;
         let keys = {};
+        let exploding = false;
+        let explosionParticles = [];
+        let explosionTimer = 0;
 
         // Shark object
         const shark = {
@@ -121,13 +124,19 @@
             height: 50,
             speed: 5,
             color: '#4682B4',
-            direction: 1 // 1 = right, -1 = left
+            direction: 1, // 1 = right, -1 = left
+            dead: false
         };
 
         // Pineapples array
         let pineapples = [];
         let pineappleSpawnTimer = 0;
         const pineappleSpawnRate = 80; // Lower = more frequent
+
+        // Bombs array
+        let bombs = [];
+        let bombSpawnTimer = 0;
+        const bombSpawnRate = 200; // Bombs spawn less frequently
 
         // Draw shark
         function drawShark() {
@@ -161,15 +170,30 @@
             ctx.lineTo(shark.x - 20, shark.y + 40);
             ctx.fill();
 
-            // Shark eye
-            ctx.fillStyle = 'white';
-            ctx.beginPath();
-            ctx.arc(shark.x + 60, shark.y + 20, 5, 0, Math.PI * 2);
-            ctx.fill();
-            ctx.fillStyle = 'black';
-            ctx.beginPath();
-            ctx.arc(shark.x + 62, shark.y + 20, 2, 0, Math.PI * 2);
-            ctx.fill();
+            // Shark eye (or X if dead)
+            if (shark.dead) {
+                // Draw X eyes
+                ctx.strokeStyle = 'black';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.moveTo(shark.x + 56, shark.y + 16);
+                ctx.lineTo(shark.x + 64, shark.y + 24);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(shark.x + 64, shark.y + 16);
+                ctx.lineTo(shark.x + 56, shark.y + 24);
+                ctx.stroke();
+            } else {
+                // Draw normal eye
+                ctx.fillStyle = 'white';
+                ctx.beginPath();
+                ctx.arc(shark.x + 60, shark.y + 20, 5, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = 'black';
+                ctx.beginPath();
+                ctx.arc(shark.x + 62, shark.y + 20, 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
 
             // Shark mouth
             ctx.strokeStyle = '#2F4F4F';
@@ -236,6 +260,97 @@
             ctx.fill();
         }
 
+        // Draw bomb
+        function drawBomb(bomb) {
+            // Bomb body (black sphere)
+            ctx.fillStyle = '#1a1a1a';
+            ctx.beginPath();
+            ctx.arc(bomb.x, bomb.y, 18, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Bomb highlight (to make it look 3D)
+            ctx.fillStyle = '#4a4a4a';
+            ctx.beginPath();
+            ctx.arc(bomb.x - 6, bomb.y - 6, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Fuse
+            ctx.strokeStyle = '#8B4513';
+            ctx.lineWidth = 3;
+            ctx.beginPath();
+            ctx.moveTo(bomb.x + 12, bomb.y - 12);
+            ctx.lineTo(bomb.x + 18, bomb.y - 22);
+            ctx.stroke();
+
+            // Spark at end of fuse
+            ctx.fillStyle = '#FF6347';
+            ctx.beginPath();
+            ctx.arc(bomb.x + 18, bomb.y - 22, 3, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Spark glow
+            ctx.fillStyle = '#FFA500';
+            ctx.beginPath();
+            ctx.arc(bomb.x + 18, bomb.y - 22, 5, 0, Math.PI * 2);
+            ctx.globalAlpha = 0.3;
+            ctx.fill();
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Create explosion
+        function createExplosion(x, y) {
+            exploding = true;
+            explosionTimer = 0;
+            explosionParticles = [];
+            shark.dead = true;
+
+            // Create particles radiating outward
+            for (let i = 0; i < 30; i++) {
+                const angle = (Math.PI * 2 * i) / 30;
+                const speed = 2 + Math.random() * 3;
+                explosionParticles.push({
+                    x: x,
+                    y: y,
+                    vx: Math.cos(angle) * speed,
+                    vy: Math.sin(angle) * speed,
+                    radius: 3 + Math.random() * 4,
+                    color: ['#FF4500', '#FF6347', '#FFA500', '#FFD700', '#FF8C00'][Math.floor(Math.random() * 5)],
+                    life: 1.0
+                });
+            }
+        }
+
+        // Draw explosion
+        function drawExplosion() {
+            explosionTimer++;
+
+            explosionParticles.forEach((particle, index) => {
+                // Update particle
+                particle.x += particle.vx;
+                particle.y += particle.vy;
+                particle.life -= 0.02;
+                particle.radius *= 0.96;
+
+                // Draw particle
+                if (particle.life > 0) {
+                    ctx.fillStyle = particle.color;
+                    ctx.globalAlpha = particle.life;
+                    ctx.beginPath();
+                    ctx.arc(particle.x, particle.y, particle.radius, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.globalAlpha = 1.0;
+                }
+            });
+
+            // End explosion after particles fade
+            if (explosionTimer > 60) {
+                exploding = false;
+                gameRunning = false;
+                finalScoreDisplay.textContent = `Final Score: ${score}`;
+                gameOverScreen.style.display = 'block';
+            }
+        }
+
         // Spawn pineapple
         function spawnPineapple() {
             const pineapple = {
@@ -262,6 +377,36 @@
                 // Remove pineapples that fall off screen
                 if (pineapples[i].y > canvas.height + 50) {
                     pineapples.splice(i, 1);
+                }
+            }
+        }
+
+        // Spawn bomb
+        function spawnBomb() {
+            const bomb = {
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: -40,
+                width: 36,
+                height: 36,
+                speed: 1.5 + Math.random() * 1.5
+            };
+            bombs.push(bomb);
+        }
+
+        // Update bombs
+        function updateBombs() {
+            bombSpawnTimer++;
+            if (bombSpawnTimer > bombSpawnRate) {
+                spawnBomb();
+                bombSpawnTimer = 0;
+            }
+
+            for (let i = bombs.length - 1; i >= 0; i--) {
+                bombs[i].y += bombs[i].speed;
+
+                // Remove bombs that fall off screen
+                if (bombs[i].y > canvas.height + 50) {
+                    bombs.splice(i, 1);
                 }
             }
         }
@@ -316,7 +461,7 @@
 
         // Game loop
         function gameLoop() {
-            if (!gameRunning) return;
+            if (!gameRunning && !exploding) return;
 
             // Clear canvas
             ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -333,11 +478,15 @@
             drawBubbles();
 
             // Update and draw shark
-            updateShark();
+            if (!exploding) {
+                updateShark();
+            }
             drawShark();
 
-            // Update and draw pineapples
-            updatePineapples();
+            // Update and draw pineapples (only if not exploding)
+            if (!exploding) {
+                updatePineapples();
+            }
             pineapples.forEach(pineapple => {
                 drawPineapple(pineapple);
 
@@ -348,6 +497,25 @@
                     pineapples.splice(pineapples.indexOf(pineapple), 1);
                 }
             });
+
+            // Update and draw bombs (only if not exploding)
+            if (!exploding) {
+                updateBombs();
+                bombs.forEach(bomb => {
+                    drawBomb(bomb);
+
+                    // Check collision with bomb - trigger explosion!
+                    if (checkCollision(bomb)) {
+                        createExplosion(bomb.x, bomb.y);
+                        bombs.splice(bombs.indexOf(bomb), 1);
+                    }
+                });
+            }
+
+            // Draw explosion if active
+            if (exploding) {
+                drawExplosion();
+            }
 
             requestAnimationFrame(gameLoop);
         }
@@ -365,10 +533,15 @@
         restartBtn.addEventListener('click', () => {
             score = 0;
             pineapples = [];
+            bombs = [];
             bubbles = [];
+            exploding = false;
+            explosionParticles = [];
+            explosionTimer = 0;
             shark.x = 100;
             shark.y = canvas.height - 100;
             shark.direction = 1;
+            shark.dead = false;
             scoreDisplay.textContent = 'Score: 0';
             gameOverScreen.style.display = 'none';
             gameRunning = true;
