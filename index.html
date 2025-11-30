@@ -30,6 +30,9 @@
             border-radius: 10px;
             box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
             background: linear-gradient(to bottom, #87CEEB 0%, #4682B4 100%);
+            max-width: 100%;
+            height: auto;
+            display: block;
         }
 
         #score {
@@ -85,13 +88,124 @@
             font-size: 16px;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
         }
+
+        /* Mobile Controls */
+        .mobile-controls {
+            display: none;
+            position: absolute;
+            bottom: -90px;
+            left: 0;
+            right: 0;
+            pointer-events: none;
+        }
+
+        .mobile-btn {
+            position: absolute;
+            width: 70px;
+            height: 70px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            color: white;
+            font-size: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.1s;
+            line-height: 1;
+            padding-bottom: 3px;
+        }
+
+        .mobile-btn:active {
+            background: rgba(255, 255, 255, 0.5);
+            transform: scale(0.95);
+        }
+
+        #leftBtn {
+            left: 20px;
+        }
+
+        #rightBtn {
+            right: 20px;
+        }
+
+        /* Show mobile controls on touch devices with small screens */
+        @media (hover: none) and (pointer: coarse) {
+            .mobile-controls {
+                display: block;
+            }
+            #instructions {
+                font-size: 14px;
+            }
+        }
+
+        /* Also show on small screens regardless of touch capability */
+        @media (max-width: 768px) {
+            .mobile-controls {
+                display: block;
+            }
+        }
+
+        /* Mute Button */
+        #muteBtn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 3px solid rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            user-select: none;
+            -webkit-user-select: none;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        #muteBtn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        #muteBtn:active {
+            transform: scale(0.95);
+        }
+
+        #muteBtn.muted {
+            background: rgba(255, 100, 100, 0.3);
+            border-color: rgba(255, 100, 100, 0.6);
+        }
     </style>
 </head>
 <body>
     <div id="gameContainer">
         <div id="score">Score: 0</div>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div style="position: relative; display: inline-block;">
+            <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+            <!-- Mobile Controls -->
+            <div class="mobile-controls">
+                <button class="mobile-btn" id="leftBtn">◀</button>
+                <button class="mobile-btn" id="rightBtn">▶</button>
+            </div>
+        </div>
         <div id="instructions">Use ← → arrow keys to move the shark!</div>
+
+        <button id="muteBtn" title="Toggle Sound">🔊</button>
 
         <div id="gameOver">
             <h2>Game Over!</h2>
@@ -108,6 +222,154 @@
         const finalScoreDisplay = document.getElementById('finalScore');
         const restartBtn = document.getElementById('restartBtn');
 
+        // Audio Context and Mute State
+        let audioContext = null;
+        let isMuted = false;
+
+        // Initialize AudioContext (lazy loading due to browser autoplay policies)
+        function initAudio() {
+            if (!audioContext) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            return audioContext;
+        }
+
+        // Load mute preference from localStorage
+        function loadMutePreference() {
+            const savedMute = localStorage.getItem('sharkGameMuted');
+            isMuted = savedMute === 'true';
+            updateMuteButton();
+        }
+
+        // Save mute preference to localStorage
+        function saveMutePreference() {
+            localStorage.setItem('sharkGameMuted', isMuted);
+        }
+
+        // Sound generation functions
+        function playPineappleSound() {
+            if (isMuted) return;
+
+            const ctx = initAudio();
+            const now = ctx.currentTime;
+
+            // Create oscillator for a cheerful ascending tone
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            // Bright, happy ascending arpeggio (C major triad)
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(523.25, now); // C5
+            oscillator.frequency.setValueAtTime(659.25, now + 0.05); // E5
+            oscillator.frequency.setValueAtTime(783.99, now + 0.10); // G5
+
+            // Quick fade out
+            gainNode.gain.setValueAtTime(0.3, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.15);
+        }
+
+        function playExplosionSound() {
+            if (isMuted) return;
+
+            const ctx = initAudio();
+            const now = ctx.currentTime;
+
+            // Create noise-based explosion
+            const bufferSize = ctx.sampleRate * 0.5; // 0.5 seconds
+            const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+            const data = buffer.getChannelData(0);
+
+            // Generate white noise with decay
+            for (let i = 0; i < bufferSize; i++) {
+                const decay = 1 - (i / bufferSize);
+                data[i] = (Math.random() * 2 - 1) * decay;
+            }
+
+            const noiseSource = ctx.createBufferSource();
+            noiseSource.buffer = buffer;
+
+            // Add bass boom with oscillator
+            const oscillator = ctx.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.setValueAtTime(100, now); // Low boom
+            oscillator.frequency.exponentialRampToValueAtTime(30, now + 0.3);
+
+            // Gain nodes
+            const noiseGain = ctx.createGain();
+            const oscGain = ctx.createGain();
+
+            noiseSource.connect(noiseGain);
+            oscillator.connect(oscGain);
+            noiseGain.connect(ctx.destination);
+            oscGain.connect(ctx.destination);
+
+            // Volume envelopes
+            noiseGain.gain.setValueAtTime(0.5, now);
+            noiseGain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+
+            oscGain.gain.setValueAtTime(0.3, now);
+            oscGain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+
+            noiseSource.start(now);
+            oscillator.start(now);
+            noiseSource.stop(now + 0.5);
+            oscillator.stop(now + 0.3);
+        }
+
+        function playShieldSound() {
+            if (isMuted) return;
+
+            const ctx = initAudio();
+            const now = ctx.currentTime;
+
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            // Magical power-up sound (rising pitch)
+            oscillator.type = 'triangle';
+            oscillator.frequency.setValueAtTime(200, now);
+            oscillator.frequency.exponentialRampToValueAtTime(800, now + 0.2);
+
+            gainNode.gain.setValueAtTime(0.2, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.2);
+        }
+
+        function playShieldBlockSound() {
+            if (isMuted) return;
+
+            const ctx = initAudio();
+            const now = ctx.currentTime;
+
+            const oscillator = ctx.createOscillator();
+            const gainNode = ctx.createGain();
+
+            oscillator.connect(gainNode);
+            gainNode.connect(ctx.destination);
+
+            // Metallic deflection sound
+            oscillator.type = 'square';
+            oscillator.frequency.setValueAtTime(300, now);
+            oscillator.frequency.setValueAtTime(150, now + 0.05);
+
+            gainNode.gain.setValueAtTime(0.3, now);
+            gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+
+            oscillator.start(now);
+            oscillator.stop(now + 0.1);
+        }
+
         // Game state
         let score = 0;
         let gameRunning = true;
@@ -117,6 +379,7 @@
         let explosionTimer = 0;
         let pineapplesEaten = 0;
         let hasShield = false;
+        let targetX = null; // For click/tap to move
 
         // Shark object
         const shark = {
@@ -378,12 +641,14 @@
 
         // Spawn pineapple
         function spawnPineapple() {
+            // Progressive difficulty: speed increases with score
+            const difficultyMultiplier = 1 + (score / 300);
             const pineapple = {
                 x: Math.random() * (canvas.width - 40) + 20,
                 y: -40,
                 width: 30,
                 height: 55,
-                speed: 2 + Math.random() * 2
+                speed: (2 + Math.random() * 2) * difficultyMultiplier
             };
             pineapples.push(pineapple);
         }
@@ -408,12 +673,14 @@
 
         // Spawn bomb
         function spawnBomb() {
+            // Progressive difficulty: speed increases with score
+            const difficultyMultiplier = 1 + (score / 300);
             const bomb = {
                 x: Math.random() * (canvas.width - 40) + 20,
                 y: -40,
                 width: 36,
                 height: 36,
-                speed: 1.5 + Math.random() * 1.5
+                speed: (1.5 + Math.random() * 1.5) * difficultyMultiplier
             };
             bombs.push(bomb);
         }
@@ -446,14 +713,40 @@
 
         // Update shark position
         function updateShark() {
+            // Handle click/tap to move
+            if (targetX !== null) {
+                const sharkCenter = shark.x + shark.width / 2;
+                const distance = targetX - sharkCenter;
+
+                if (Math.abs(distance) > shark.speed) {
+                    if (distance < 0) {
+                        shark.x -= shark.speed;
+                        shark.direction = -1; // Face left
+                    } else {
+                        shark.x += shark.speed;
+                        shark.direction = 1; // Face right
+                    }
+                } else {
+                    // Reached target
+                    targetX = null;
+                }
+            }
+
+            // Handle keyboard/button controls (overrides tap-to-move)
             if (keys['ArrowLeft'] && shark.x > 0) {
                 shark.x -= shark.speed;
                 shark.direction = -1; // Face left
+                targetX = null; // Cancel tap-to-move
             }
             if (keys['ArrowRight'] && shark.x < canvas.width - shark.width) {
                 shark.x += shark.speed;
                 shark.direction = 1; // Face right
+                targetX = null; // Cancel tap-to-move
             }
+
+            // Enforce boundaries
+            if (shark.x < 0) shark.x = 0;
+            if (shark.x > canvas.width - shark.width) shark.x = canvas.width - shark.width;
         }
 
         // Draw bubbles for effect
@@ -523,9 +816,12 @@
                     scoreDisplay.textContent = `Score: ${score}`;
                     pineapples.splice(pineapples.indexOf(pineapple), 1);
 
+                    playPineappleSound();
+
                     // Award shield every 10 pineapples
                     if (pineapplesEaten % 10 === 0) {
                         hasShield = true;
+                        playShieldSound();
                     }
                 }
             });
@@ -541,9 +837,11 @@
                         if (hasShield) {
                             // Shield blocks the bomb
                             hasShield = false;
+                            playShieldBlockSound();
                             bombs.splice(bombs.indexOf(bomb), 1);
                         } else {
                             // No shield - trigger explosion!
+                            playExplosionSound();
                             createExplosion(bomb.x, bomb.y);
                             bombs.splice(bombs.indexOf(bomb), 1);
                         }
@@ -558,6 +856,95 @@
 
             requestAnimationFrame(gameLoop);
         }
+
+        // Mute button control
+        const muteBtn = document.getElementById('muteBtn');
+
+        function updateMuteButton() {
+            if (isMuted) {
+                muteBtn.textContent = '🔇';
+                muteBtn.classList.add('muted');
+                muteBtn.title = 'Unmute Sound';
+            } else {
+                muteBtn.textContent = '🔊';
+                muteBtn.classList.remove('muted');
+                muteBtn.title = 'Mute Sound';
+            }
+        }
+
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            saveMutePreference();
+            updateMuteButton();
+        });
+
+        // Initialize mute state on page load
+        loadMutePreference();
+
+        // Mobile button controls
+        const leftBtn = document.getElementById('leftBtn');
+        const rightBtn = document.getElementById('rightBtn');
+
+        if (leftBtn) {
+            // Touch events
+            leftBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys['ArrowLeft'] = true;
+            });
+            leftBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys['ArrowLeft'] = false;
+            });
+            // Mouse events for testing
+            leftBtn.addEventListener('mousedown', () => {
+                keys['ArrowLeft'] = true;
+            });
+            leftBtn.addEventListener('mouseup', () => {
+                keys['ArrowLeft'] = false;
+            });
+            leftBtn.addEventListener('mouseleave', () => {
+                keys['ArrowLeft'] = false;
+            });
+        }
+
+        if (rightBtn) {
+            // Touch events
+            rightBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                keys['ArrowRight'] = true;
+            });
+            rightBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                keys['ArrowRight'] = false;
+            });
+            // Mouse events for testing
+            rightBtn.addEventListener('mousedown', () => {
+                keys['ArrowRight'] = true;
+            });
+            rightBtn.addEventListener('mouseup', () => {
+                keys['ArrowRight'] = false;
+            });
+            rightBtn.addEventListener('mouseleave', () => {
+                keys['ArrowRight'] = false;
+            });
+        }
+
+        // Click/tap to move shark
+        canvas.addEventListener('click', (e) => {
+            if (!gameRunning || exploding) return;
+            const rect = canvas.getBoundingClientRect();
+            const clickX = e.clientX - rect.left;
+            targetX = clickX;
+        });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (!gameRunning || exploding) return;
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            const tapX = touch.clientX - rect.left;
+            targetX = tapX;
+        });
 
         // Keyboard controls
         document.addEventListener('keydown', (e) => {
@@ -579,6 +966,7 @@
             explosionTimer = 0;
             pineapplesEaten = 0;
             hasShield = false;
+            targetX = null;
             shark.x = 100;
             shark.y = canvas.height - 100;
             shark.direction = 1;
