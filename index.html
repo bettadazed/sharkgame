@@ -550,39 +550,97 @@
 
         // Draw bomb
         function drawBomb(bomb) {
-            // Bomb body (black sphere)
-            ctx.fillStyle = '#1a1a1a';
-            ctx.beginPath();
-            ctx.arc(bomb.x, bomb.y, 18, 0, Math.PI * 2);
-            ctx.fill();
+            if (bomb.isSweeper) {
+                // Sweeper bomb - distinct purple/magenta appearance
+                // Bomb body (purple sphere)
+                ctx.fillStyle = '#8B008B';
+                ctx.beginPath();
+                ctx.arc(bomb.x, bomb.y, 18, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Bomb highlight (to make it look 3D)
-            ctx.fillStyle = '#4a4a4a';
-            ctx.beginPath();
-            ctx.arc(bomb.x - 6, bomb.y - 6, 5, 0, Math.PI * 2);
-            ctx.fill();
+                // Bomb highlight (to make it look 3D)
+                ctx.fillStyle = '#DA70D6';
+                ctx.beginPath();
+                ctx.arc(bomb.x - 6, bomb.y - 6, 5, 0, Math.PI * 2);
+                ctx.fill();
 
-            // Fuse
-            ctx.strokeStyle = '#8B4513';
-            ctx.lineWidth = 3;
-            ctx.beginPath();
-            ctx.moveTo(bomb.x + 12, bomb.y - 12);
-            ctx.lineTo(bomb.x + 18, bomb.y - 22);
-            ctx.stroke();
+                // Motion trail/arrows to show it sweeps
+                ctx.strokeStyle = '#FF00FF';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5;
+                // Left arrow
+                ctx.beginPath();
+                ctx.moveTo(bomb.x - 25, bomb.y);
+                ctx.lineTo(bomb.x - 15, bomb.y - 5);
+                ctx.lineTo(bomb.x - 15, bomb.y + 5);
+                ctx.closePath();
+                ctx.fill();
+                // Right arrow
+                ctx.beginPath();
+                ctx.moveTo(bomb.x + 25, bomb.y);
+                ctx.lineTo(bomb.x + 15, bomb.y - 5);
+                ctx.lineTo(bomb.x + 15, bomb.y + 5);
+                ctx.closePath();
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
 
-            // Spark at end of fuse
-            ctx.fillStyle = '#FF6347';
-            ctx.beginPath();
-            ctx.arc(bomb.x + 18, bomb.y - 22, 3, 0, Math.PI * 2);
-            ctx.fill();
+                // Fuse
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(bomb.x + 12, bomb.y - 12);
+                ctx.lineTo(bomb.x + 18, bomb.y - 22);
+                ctx.stroke();
 
-            // Spark glow
-            ctx.fillStyle = '#FFA500';
-            ctx.beginPath();
-            ctx.arc(bomb.x + 18, bomb.y - 22, 5, 0, Math.PI * 2);
-            ctx.globalAlpha = 0.3;
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
+                // Spark at end of fuse (brighter for sweeper)
+                ctx.fillStyle = '#FF00FF';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 18, bomb.y - 22, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Spark glow
+                ctx.fillStyle = '#DA70D6';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 18, bomb.y - 22, 5, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.4;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            } else {
+                // Regular bomb - black appearance
+                // Bomb body (black sphere)
+                ctx.fillStyle = '#1a1a1a';
+                ctx.beginPath();
+                ctx.arc(bomb.x, bomb.y, 18, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Bomb highlight (to make it look 3D)
+                ctx.fillStyle = '#4a4a4a';
+                ctx.beginPath();
+                ctx.arc(bomb.x - 6, bomb.y - 6, 5, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Fuse
+                ctx.strokeStyle = '#8B4513';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.moveTo(bomb.x + 12, bomb.y - 12);
+                ctx.lineTo(bomb.x + 18, bomb.y - 22);
+                ctx.stroke();
+
+                // Spark at end of fuse
+                ctx.fillStyle = '#FF6347';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 18, bomb.y - 22, 3, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Spark glow
+                ctx.fillStyle = '#FFA500';
+                ctx.beginPath();
+                ctx.arc(bomb.x + 18, bomb.y - 22, 5, 0, Math.PI * 2);
+                ctx.globalAlpha = 0.3;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            }
         }
 
         // Create explosion
@@ -675,12 +733,18 @@
         function spawnBomb() {
             // Progressive difficulty: speed increases with score
             const difficultyMultiplier = 1 + (score / 300);
+            const isSweeper = Math.random() < 0.3; // 30% chance for sweeper bomb
+
             const bomb = {
                 x: Math.random() * (canvas.width - 40) + 20,
                 y: -40,
                 width: 36,
                 height: 36,
-                speed: (1.5 + Math.random() * 1.5) * difficultyMultiplier
+                speed: (1.5 + Math.random() * 1.5) * difficultyMultiplier,
+                isSweeper: isSweeper,
+                oscillationPhase: 0, // For side-to-side motion
+                oscillationSpeed: 0.08 + Math.random() * 0.04, // How fast it sweeps
+                oscillationAmplitude: 60 + Math.random() * 40 // How far it sweeps
             };
             bombs.push(bomb);
         }
@@ -694,10 +758,24 @@
             }
 
             for (let i = bombs.length - 1; i >= 0; i--) {
-                bombs[i].y += bombs[i].speed;
+                const bomb = bombs[i];
+
+                // Vertical movement
+                bomb.y += bomb.speed;
+
+                // Sweeper bomb: side-to-side movement
+                if (bomb.isSweeper) {
+                    bomb.oscillationPhase += bomb.oscillationSpeed;
+                    const offsetX = Math.sin(bomb.oscillationPhase) * bomb.oscillationAmplitude;
+                    bomb.x += offsetX * 0.1; // Apply horizontal movement
+
+                    // Keep sweeper bomb within canvas bounds
+                    if (bomb.x < 20) bomb.x = 20;
+                    if (bomb.x > canvas.width - 20) bomb.x = canvas.width - 20;
+                }
 
                 // Remove bombs that fall off screen
-                if (bombs[i].y > canvas.height + 50) {
+                if (bomb.y > canvas.height + 50) {
                     bombs.splice(i, 1);
                 }
             }
