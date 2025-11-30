@@ -8,7 +8,7 @@ This is a browser-based arcade game where you control a shark with an unusual cr
 
 ## How to Play
 
-1. Open [shark-game.html](shark-game.html) in your web browser
+1. Open [index.html](index.html) in your web browser
 2. Use the **← →** arrow keys to move your shark left and right
 3. Catch the falling pineapples to increase your score
 4. **AVOID THE BOMBS** or face a dramatic underwater explosion
