@@ -6,6 +6,10 @@ Welcome to the most absurdly delightful underwater adventure you never knew you 
 
 This is a browser-based arcade game where you control a shark with an unusual craving for tropical fruit. Navigate the deep blue sea, catch falling pineapples, dodge explosive bombs, and see how high you can score before things get... explosive.
 
+## Play Online
+
+**[🎮 Play the game here!](https://bettadazed.github.io/sharkgame/)**
+
 ## How to Play
 
 1. Open [index.html](index.html) in your web browser
